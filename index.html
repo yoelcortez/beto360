@@ -3,46 +3,60 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Beto360 - Base de Datos Offline</title>
+  <title>Beto360 - Bitácora GPS y Cámara</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#2563eb">
   <style>
     body { font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f8fafc; color: #1e293b; }
     .card { background: white; padding: 16px; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); margin-bottom: 16px; }
-    textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
-    input[type="file"] { margin: 12px 0; display: block; width: 100%; }
-    button { background: #2563eb; color: white; border: none; padding: 12px 18px; border-radius: 8px; font-size: 15px; cursor: pointer; width: 100%; font-weight: bold; }
+    textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 16px; box-sizing: border-box; margin-bottom: 10px; }
+    button { background: #2563eb; color: white; border: none; padding: 12px 16px; border-radius: 8px; font-size: 15px; cursor: pointer; width: 100%; font-weight: bold; }
     button:hover { background: #1d4ed8; }
-    .grupo-respaldo { display: flex; gap: 10px; }
+    button:disabled { background: #94a3b8; cursor: not-allowed; }
+    .grupo-botones { display: flex; gap: 10px; margin-bottom: 12px; }
+    .btn-camara { background: #0284c7; }
+    .btn-gps { background: #d97706; }
     .btn-exportar { background: #059669; }
-    .btn-exportar:hover { background: #047857; }
     .btn-importar { background: #475569; }
-    .btn-importar:hover { background: #334155; }
-    .btn-borrar { background: #ef4444; padding: 6px 12px; font-size: 13px; width: auto; margin-top: 8px; }
+    .btn-borrar { background: #ef4444; padding: 6px 12px; font-size: 13px; width: auto; margin-top: 10px; }
+    .estado-info { font-size: 13px; color: #334155; background: #f1f5f9; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; display: none; }
     .registro { background: white; padding: 14px; border-radius: 10px; margin-bottom: 12px; border-left: 4px solid #2563eb; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
     .registro img { max-width: 100%; border-radius: 8px; margin-top: 10px; display: block; }
     .fecha { font-size: 12px; color: #64748b; margin-bottom: 6px; }
+    .gps-badge { display: inline-block; background: #fef3c7; color: #92400e; padding: 4px 8px; border-radius: 6px; font-size: 12px; margin-top: 8px; text-decoration: none; font-weight: 500; }
   </style>
 </head>
 <body>
 
-  <h2>📸 Bitácora Offline (Beto360)</h2>
+  <h2>📍 Beto360 - Bitácora Offline</h2>
 
-  <!-- Formulario para agregar datos -->
+  <!-- Formulario principal -->
   <div class="card">
-    <textarea id="textoNota" rows="3" placeholder="Escribe una descripción o nota..."></textarea>
-    <input type="file" id="fotoInput" accept="image/*">
-    <button onclick="guardarRegistro()">Guardar en Base de Datos</button>
+    <textarea id="textoNota" rows="3" placeholder="Escribe una descripción del lugar o actividad..."></textarea>
+    
+    <!-- Botones de Cámara y GPS -->
+    <div class="grupo-botones">
+      <button type="button" class="btn-camara" onclick="document.getElementById('fotoInput').click()">📷 Tomar Foto</button>
+      <button type="button" class="btn-gps" id="btnGps" onclick="obtenerUbicacion()">📍 Capturar GPS</button>
+    </div>
+
+    <!-- Input oculto que abre la cámara trasera directamente en celulares -->
+    <input type="file" id="fotoInput" accept="image/*" capture="environment" style="display: none;" onchange="mostrarNombreFoto(event)">
+
+    <!-- Indicadores visuales de foto y GPS listos -->
+    <div id="infoFoto" class="estado-info"></div>
+    <div id="infoGps" class="estado-info"></div>
+
+    <button onclick="guardarRegistro()">💾 Guardar Registro</button>
   </div>
 
-  <!-- Panel de Respaldo y Restauración -->
+  <!-- Panel de Respaldo -->
   <div class="card">
-    <div style="font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #475569;">💾 Copia de Seguridad</div>
-    <div class="grupo-respaldo">
-      <button class="btn-exportar" onclick="exportarRespaldo()">⬇️ Descargar Respaldo</button>
-      <button class="btn-importar" onclick="document.getElementById('importarInput').click()">⬆️ Restaurar Datos</button>
+    <div style="font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #475569;">Copia de Seguridad</div>
+    <div class="grupo-botones" style="margin-bottom: 0;">
+      <button class="btn-exportar" onclick="exportarRespaldo()">⬇️ Exportar</button>
+      <button class="btn-importar" onclick="document.getElementById('importarInput').click()">⬆️ Restaurar</button>
     </div>
-    <!-- Input oculto para seleccionar el archivo de respaldo -->
     <input type="file" id="importarInput" accept=".json" style="display: none;" onchange="importarRespaldo(event)">
   </div>
 
@@ -50,8 +64,9 @@
 
   <script>
     let db;
+    let ubicacionActual = null; // Guardará { lat, lng } temporalmente
 
-    // 1. Abrir base de datos IndexedDB
+    // 1. Iniciar IndexedDB (Versión 1)
     const request = indexedDB.open('Beto360DB', 1);
 
     request.onupgradeneeded = (e) => {
@@ -64,33 +79,84 @@
       mostrarRegistros();
     };
 
-    // 2. Guardar registro nuevo
+    // 2. Mostrar aviso cuando se toma una foto
+    function mostrarNombreFoto(event) {
+      const archivo = event.target.files[0];
+      const infoFoto = document.getElementById('infoFoto');
+      if (archivo) {
+        infoFoto.style.display = 'block';
+        infoFoto.textContent = `📷 Foto lista: ${archivo.name}`;
+      }
+    }
+
+    // 3. Obtener coordenadas GPS (funciona sin internet usando el chip GPS del celular)
+    function obtenerUbicacion() {
+      const infoGps = document.getElementById('infoGps');
+      const btnGps = document.getElementById('btnGps');
+
+      if (!('geolocation' in navigator)) {
+        alert('Tu dispositivo no soporta GPS.');
+        return;
+      }
+
+      btnGps.disabled = true;
+      btnGps.textContent = '⏳ Buscando satélites...';
+      infoGps.style.display = 'block';
+      infoGps.textContent = 'Obteniendo coordenadas exactas...';
+
+      navigator.geolocation.getCurrentPosition(
+        (posicion) => {
+          ubicacionActual = {
+            lat: posicion.coords.latitude.toFixed(6),
+            lng: posicion.coords.longitude.toFixed(6),
+            precision: Math.round(posicion.coords.accuracy)
+          };
+          infoGps.innerHTML = `✅ <b>GPS fijado:</b> ${ubicacionActual.lat}, ${ubicacionActual.lng} (±${ubicacionActual.precision}m)`;
+          btnGps.disabled = false;
+          btnGps.textContent = '📍 Actualizar GPS';
+        },
+        (error) => {
+          infoGps.textContent = '❌ No se pudo obtener el GPS. Revisa que tengas la ubicación encendida y con permisos.';
+          btnGps.disabled = false;
+          btnGps.textContent = '📍 Reintentar GPS';
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      );
+    }
+
+    // 4. Guardar nota + foto + GPS en IndexedDB
     function guardarRegistro() {
       const texto = document.getElementById('textoNota').value.trim();
       const archivoFoto = document.getElementById('fotoInput').files[0];
 
-      if (!texto && !archivoFoto) {
-        alert('Escribe una nota o selecciona una foto primero.');
+      if (!texto && !archivoFoto && !ubicacionActual) {
+        alert('Agrega al menos una nota, una foto o tu ubicación GPS.');
         return;
       }
 
       const nuevoRegistro = {
         texto: texto,
         fecha: new Date().toLocaleString(),
-        imagen: archivoFoto || null
+        imagen: archivoFoto || null,
+        gps: ubicacionActual
       };
 
       const transaccion = db.transaction(['registros'], 'readwrite');
       transaccion.objectStore('registros').add(nuevoRegistro);
 
       transaccion.oncomplete = () => {
+        // Limpiar formulario
         document.getElementById('textoNota').value = '';
         document.getElementById('fotoInput').value = '';
+        document.getElementById('infoFoto').style.display = 'none';
+        document.getElementById('infoGps').style.display = 'none';
+        document.getElementById('btnGps').textContent = '📍 Capturar GPS';
+        ubicacionActual = null;
         mostrarRegistros();
       };
     }
 
-    // 3. Mostrar registros en pantalla
+    // 5. Mostrar todos los registros
     function mostrarRegistros() {
       const contenedor = document.getElementById('listaRegistros');
       contenedor.innerHTML = '';
@@ -111,11 +177,18 @@
             imgHTML = `<img src="${urlImagen}" alt="Foto guardada">`;
           }
 
+          let gpsHTML = '';
+          if (item.gps) {
+            const mapaUrl = `https://google.com{item.gps.lat},${item.gps.lng}`;
+            gpsHTML = `<div><a href="${mapaUrl}" target="_blank" class="gps-badge">📍 ${item.gps.lat}, ${item.gps.lng} (Ver en mapa)</a></div>`;
+          }
+
           div.innerHTML = `
             <div class="fecha">📅 ${item.fecha}</div>
             <div>${item.texto}</div>
+            ${gpsHTML}
             ${imgHTML}
-            <button class="btn-borrar" onclick="eliminarRegistro(${item.id})">Eliminar</button>
+            <div><button class="btn-borrar" onclick="eliminarRegistro(${item.id})">Eliminar</button></div>
           `;
           contenedor.appendChild(div);
           cursor.continue();
@@ -123,16 +196,14 @@
       };
     }
 
-    // 4. Eliminar un registro
+    // 6. Eliminar registro
     function eliminarRegistro(id) {
       const transaccion = db.transaction(['registros'], 'readwrite');
       transaccion.objectStore('registros').delete(id);
       transaccion.oncomplete = () => mostrarRegistros();
     }
 
-    // --- FUNCIONES DE RESPALDO Y RESTAURACIÓN ---
-
-    // Convertir imagen (Blob) a texto Base64 para poder guardarla en un archivo JSON
+    // 7. Respaldo y Restauración (incluye GPS y Fotos)
     function blobABase64(blob) {
       return new Promise((resolve) => {
         const reader = new FileReader();
@@ -141,84 +212,34 @@
       });
     }
 
-    // Exportar todos los datos a un archivo .json
     async function exportarRespaldo() {
       const transaccion = db.transaction(['registros'], 'readonly');
-      const almacen = transaccion.objectStore('registros');
-      const peticion = almacen.getAll();
+      const peticion = transaccion.objectStore('registros').getAll();
 
       peticion.onsuccess = async () => {
         const registros = peticion.result;
         if (registros.length === 0) {
-          alert('No hay datos guardados para exportar.');
+          alert('No hay datos para exportar.');
           return;
         }
 
         const datosExportar = [];
         for (const reg of registros) {
-          let imagenBase64 = null;
-          if (reg.imagen) {
-            imagenBase64 = await blobABase64(reg.imagen);
-          }
           datosExportar.push({
             texto: reg.texto,
             fecha: reg.fecha,
-            imagenBase64: imagenBase64
+            gps: reg.gps || null,
+            imagenBase64: reg.imagen ? await blobABase64(reg.imagen) : null
           });
         }
 
-        // Crear el archivo y forzar la descarga
-        const contenidoJSON = JSON.stringify(datosExportar, null, 2);
-        const archivo = new Blob([contenidoJSON], { type: 'application/json' });
+        const archivo = new Blob([JSON.stringify(datosExportar, null, 2)], { type: 'application/json' });
         const enlace = document.createElement('a');
-        const fechaHoy = new Date().toISOString().slice(0, 10);
-        
         enlace.href = URL.createObjectURL(archivo);
-        enlace.download = `respaldo-beto360-${fechaHoy}.json`;
+        enlace.download = `beto360-respaldo-${new Date().toISOString().slice(0, 10)}.json`;
         enlace.click();
       };
     }
 
-    // Importar datos desde un archivo .json
     function importarRespaldo(event) {
-      const archivo = event.target.files[0];
-      if (!archivo) return;
-
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        try {
-          const datosImportados = JSON.parse(e.target.result);
-          
-          for (const item of datosImportados) {
-            let imagenBlob = null;
-            if (item.imagenBase64) {
-              // Convertir el texto Base64 de vuelta a archivo de imagen
-              const respuesta = await fetch(item.imagenBase64);
-              imagenBlob = await respuesta.blob();
-            }
-
-            const transaccion = db.transaction(['registros'], 'readwrite');
-            transaccion.objectStore('registros').add({
-              texto: item.texto,
-              fecha: item.fecha,
-              imagen: imagenBlob
-            });
-          }
-
-          alert(`¡Se restauraron ${datosImportados.length} registros correctamente!`);
-          mostrarRegistros();
-        } catch (error) {
-          alert('El archivo seleccionado no es un respaldo válido.');
-        }
-        event.target.value = ''; // Limpiar el selector
-      };
-      reader.readAsText(archivo);
-    }
-
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js');
-    }
-  </script>
-
-</body>
-</html>
+      
