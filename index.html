@@ -3,30 +3,126 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mi App Offline</title>
-  <!-- Enlace al archivo de configuración de la App -->
+  <title>Beto360 - Base de Datos Offline</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#2563eb">
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f8fafc; color: #1e293b; }
+    .card { background: white; padding: 16px; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); margin-bottom: 20px; }
+    textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
+    input[type="file"] { margin: 12px 0; display: block; width: 100%; }
+    button { background: #2563eb; color: white; border: none; padding: 12px 18px; border-radius: 8px; font-size: 16px; cursor: pointer; width: 100%; font-weight: bold; }
+    button:hover { background: #1d4ed8; }
+    .btn-borrar { background: #ef4444; padding: 6px 12px; font-size: 13px; width: auto; margin-top: 8px; }
+    .registro { background: white; padding: 14px; border-radius: 10px; margin-bottom: 12px; border-left: 4px solid #2563eb; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+    .registro img { max-width: 100%; border-radius: 8px; margin-top: 10px; display: block; }
+    .fecha { font-size: 12px; color: #64748b; margin-bottom: 6px; }
+  </style>
 </head>
-<body style="font-family: sans-serif; padding: 20px;">
+<body>
 
-  <h2>Mis Notas Offline</h2>
-  <textarea id="miDato" rows="5" style="width: 100%; font-size: 16px;" placeholder="Escribe aquí..."></textarea>
+  <h2>📸 Bitácora Offline (IndexedDB)</h2>
+
+  <div class="card">
+    <textarea id="textoNota" rows="3" placeholder="Escribe una descripción o nota..."></textarea>
+    <!-- En celulares, 'capture' permite abrir la cámara directamente -->
+    <input type="file" id="fotoInput" accept="image/*">
+    <button onclick="guardarRegistro()">Guardar en Base de Datos</button>
+  </div>
+
+  <div id="listaRegistros"></div>
 
   <script>
-    const input = document.getElementById('miDato');
-    input.value = localStorage.getItem('datoGuardado') || '';
-    input.addEventListener('input', () => {
-      localStorage.setItem('datoGuardado', input.value);
-    });
+    let db;
 
-    // Activar el funcionamiento sin internet (Service Worker)
+    // 1. Abrir o crear la base de datos IndexedDB
+    const request = indexedDB.open('Beto360DB', 1);
+
+    request.onupgradeneeded = (e) => {
+      db = e.target.result;
+      // Crear una tabla (ObjectStore) llamada 'registros' con ID automático
+      db.createObjectStore('registros', { keyPath: 'id', autoIncrement: true });
+    };
+
+    request.onsuccess = (e) => {
+      db = e.target.result;
+      mostrarRegistros(); // Cargar los datos guardados al abrir
+    };
+
+    // 2. Guardar texto + imagen en IndexedDB
+    function guardarRegistro() {
+      const texto = document.getElementById('textoNota').value.trim();
+      const archivoFoto = document.getElementById('fotoInput').files[0];
+
+      if (!texto && !archivoFoto) {
+        alert('Escribe una nota o selecciona una foto primero.');
+        return;
+      }
+
+      const nuevoRegistro = {
+        texto: texto,
+        fecha: new Date().toLocaleString(),
+        imagen: archivoFoto || null // IndexedDB guarda el archivo binario directo
+      };
+
+      const transaccion = db.transaction(['registros'], 'readwrite');
+      const almacen = transaccion.objectStore('registros');
+      almacen.add(nuevoRegistro);
+
+      transaccion.oncomplete = () => {
+        document.getElementById('textoNota').value = '';
+        document.getElementById('fotoInput').value = '';
+        mostrarRegistros();
+      };
+    }
+
+    // 3. Leer y dibujar todos los registros guardados
+    function mostrarRegistros() {
+      const contenedor = document.getElementById('listaRegistros');
+      contenedor.innerHTML = '';
+
+      const transaccion = db.transaction(['registros'], 'readonly');
+      const almacen = transaccion.objectStore('registros');
+
+      almacen.openCursor(null, 'prev').onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor) {
+          const item = cursor.value;
+          const div = document.createElement('div');
+          div.className = 'registro';
+
+          let imgHTML = '';
+          if (item.imagen) {
+            // Convertir el archivo guardado en una URL visible
+            const urlImagen = URL.createObjectURL(item.imagen);
+            imgHTML = `<img src="${urlImagen}" alt="Foto guardada">`;
+          }
+
+          div.innerHTML = `
+            <div class="fecha">📅 ${item.fecha}</div>
+            <div>${item.texto}</div>
+            ${imgHTML}
+            <button class="btn-borrar" onclick="eliminarRegistro(${item.id})">Eliminar</button>
+          `;
+          contenedor.appendChild(div);
+          cursor.continue();
+        }
+      };
+    }
+
+    // 4. Eliminar un registro específico
+    function eliminarRegistro(id) {
+      const transaccion = db.transaction(['registros'], 'readwrite');
+      transaccion.objectStore('registros').delete(id);
+      transaccion.oncomplete = () => mostrarRegistros();
+    }
+
+    // Registrar Service Worker para modo sin internet
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js')
-        .then(() => console.log('App lista para funcionar sin internet'))
-        .catch((err) => console.log('Error:', err));
+      navigator.serviceWorker.register('./sw.js');
     }
   </script>
 
 </body>
 </html>
+
