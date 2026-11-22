@@ -8,11 +8,16 @@
   <meta name="theme-color" content="#2563eb">
   <style>
     body { font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f8fafc; color: #1e293b; }
-    .card { background: white; padding: 16px; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); margin-bottom: 20px; }
+    .card { background: white; padding: 16px; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); margin-bottom: 16px; }
     textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
     input[type="file"] { margin: 12px 0; display: block; width: 100%; }
-    button { background: #2563eb; color: white; border: none; padding: 12px 18px; border-radius: 8px; font-size: 16px; cursor: pointer; width: 100%; font-weight: bold; }
+    button { background: #2563eb; color: white; border: none; padding: 12px 18px; border-radius: 8px; font-size: 15px; cursor: pointer; width: 100%; font-weight: bold; }
     button:hover { background: #1d4ed8; }
+    .grupo-respaldo { display: flex; gap: 10px; }
+    .btn-exportar { background: #059669; }
+    .btn-exportar:hover { background: #047857; }
+    .btn-importar { background: #475569; }
+    .btn-importar:hover { background: #334155; }
     .btn-borrar { background: #ef4444; padding: 6px 12px; font-size: 13px; width: auto; margin-top: 8px; }
     .registro { background: white; padding: 14px; border-radius: 10px; margin-bottom: 12px; border-left: 4px solid #2563eb; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
     .registro img { max-width: 100%; border-radius: 8px; margin-top: 10px; display: block; }
@@ -21,13 +26,24 @@
 </head>
 <body>
 
-  <h2>📸 Bitácora Offline (IndexedDB)</h2>
+  <h2>📸 Bitácora Offline (Beto360)</h2>
 
+  <!-- Formulario para agregar datos -->
   <div class="card">
     <textarea id="textoNota" rows="3" placeholder="Escribe una descripción o nota..."></textarea>
-    <!-- En celulares, 'capture' permite abrir la cámara directamente -->
     <input type="file" id="fotoInput" accept="image/*">
     <button onclick="guardarRegistro()">Guardar en Base de Datos</button>
+  </div>
+
+  <!-- Panel de Respaldo y Restauración -->
+  <div class="card">
+    <div style="font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #475569;">💾 Copia de Seguridad</div>
+    <div class="grupo-respaldo">
+      <button class="btn-exportar" onclick="exportarRespaldo()">⬇️ Descargar Respaldo</button>
+      <button class="btn-importar" onclick="document.getElementById('importarInput').click()">⬆️ Restaurar Datos</button>
+    </div>
+    <!-- Input oculto para seleccionar el archivo de respaldo -->
+    <input type="file" id="importarInput" accept=".json" style="display: none;" onchange="importarRespaldo(event)">
   </div>
 
   <div id="listaRegistros"></div>
@@ -35,21 +51,20 @@
   <script>
     let db;
 
-    // 1. Abrir o crear la base de datos IndexedDB
+    // 1. Abrir base de datos IndexedDB
     const request = indexedDB.open('Beto360DB', 1);
 
     request.onupgradeneeded = (e) => {
       db = e.target.result;
-      // Crear una tabla (ObjectStore) llamada 'registros' con ID automático
       db.createObjectStore('registros', { keyPath: 'id', autoIncrement: true });
     };
 
     request.onsuccess = (e) => {
       db = e.target.result;
-      mostrarRegistros(); // Cargar los datos guardados al abrir
+      mostrarRegistros();
     };
 
-    // 2. Guardar texto + imagen en IndexedDB
+    // 2. Guardar registro nuevo
     function guardarRegistro() {
       const texto = document.getElementById('textoNota').value.trim();
       const archivoFoto = document.getElementById('fotoInput').files[0];
@@ -62,12 +77,11 @@
       const nuevoRegistro = {
         texto: texto,
         fecha: new Date().toLocaleString(),
-        imagen: archivoFoto || null // IndexedDB guarda el archivo binario directo
+        imagen: archivoFoto || null
       };
 
       const transaccion = db.transaction(['registros'], 'readwrite');
-      const almacen = transaccion.objectStore('registros');
-      almacen.add(nuevoRegistro);
+      transaccion.objectStore('registros').add(nuevoRegistro);
 
       transaccion.oncomplete = () => {
         document.getElementById('textoNota').value = '';
@@ -76,7 +90,7 @@
       };
     }
 
-    // 3. Leer y dibujar todos los registros guardados
+    // 3. Mostrar registros en pantalla
     function mostrarRegistros() {
       const contenedor = document.getElementById('listaRegistros');
       contenedor.innerHTML = '';
@@ -93,7 +107,6 @@
 
           let imgHTML = '';
           if (item.imagen) {
-            // Convertir el archivo guardado en una URL visible
             const urlImagen = URL.createObjectURL(item.imagen);
             imgHTML = `<img src="${urlImagen}" alt="Foto guardada">`;
           }
@@ -110,14 +123,98 @@
       };
     }
 
-    // 4. Eliminar un registro específico
+    // 4. Eliminar un registro
     function eliminarRegistro(id) {
       const transaccion = db.transaction(['registros'], 'readwrite');
       transaccion.objectStore('registros').delete(id);
       transaccion.oncomplete = () => mostrarRegistros();
     }
 
-    // Registrar Service Worker para modo sin internet
+    // --- FUNCIONES DE RESPALDO Y RESTAURACIÓN ---
+
+    // Convertir imagen (Blob) a texto Base64 para poder guardarla en un archivo JSON
+    function blobABase64(blob) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    // Exportar todos los datos a un archivo .json
+    async function exportarRespaldo() {
+      const transaccion = db.transaction(['registros'], 'readonly');
+      const almacen = transaccion.objectStore('registros');
+      const peticion = almacen.getAll();
+
+      peticion.onsuccess = async () => {
+        const registros = peticion.result;
+        if (registros.length === 0) {
+          alert('No hay datos guardados para exportar.');
+          return;
+        }
+
+        const datosExportar = [];
+        for (const reg of registros) {
+          let imagenBase64 = null;
+          if (reg.imagen) {
+            imagenBase64 = await blobABase64(reg.imagen);
+          }
+          datosExportar.push({
+            texto: reg.texto,
+            fecha: reg.fecha,
+            imagenBase64: imagenBase64
+          });
+        }
+
+        // Crear el archivo y forzar la descarga
+        const contenidoJSON = JSON.stringify(datosExportar, null, 2);
+        const archivo = new Blob([contenidoJSON], { type: 'application/json' });
+        const enlace = document.createElement('a');
+        const fechaHoy = new Date().toISOString().slice(0, 10);
+        
+        enlace.href = URL.createObjectURL(archivo);
+        enlace.download = `respaldo-beto360-${fechaHoy}.json`;
+        enlace.click();
+      };
+    }
+
+    // Importar datos desde un archivo .json
+    function importarRespaldo(event) {
+      const archivo = event.target.files[0];
+      if (!archivo) return;
+
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const datosImportados = JSON.parse(e.target.result);
+          
+          for (const item of datosImportados) {
+            let imagenBlob = null;
+            if (item.imagenBase64) {
+              // Convertir el texto Base64 de vuelta a archivo de imagen
+              const respuesta = await fetch(item.imagenBase64);
+              imagenBlob = await respuesta.blob();
+            }
+
+            const transaccion = db.transaction(['registros'], 'readwrite');
+            transaccion.objectStore('registros').add({
+              texto: item.texto,
+              fecha: item.fecha,
+              imagen: imagenBlob
+            });
+          }
+
+          alert(`¡Se restauraron ${datosImportados.length} registros correctamente!`);
+          mostrarRegistros();
+        } catch (error) {
+          alert('El archivo seleccionado no es un respaldo válido.');
+        }
+        event.target.value = ''; // Limpiar el selector
+      };
+      reader.readAsText(archivo);
+    }
+
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js');
     }
@@ -125,4 +222,3 @@
 
 </body>
 </html>
-
