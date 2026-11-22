@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mi App Offline</title>
+  <!-- Enlace al archivo de configuración de la App -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2563eb">
+</head>
+<body style="font-family: sans-serif; padding: 20px;">
+
+  <h2>Mis Notas Offline</h2>
+  <textarea id="miDato" rows="5" style="width: 100%; font-size: 16px;" placeholder="Escribe aquí..."></textarea>
+
+  <script>
+    const input = document.getElementById('miDato');
+    input.value = localStorage.getItem('datoGuardado') || '';
+    input.addEventListener('input', () => {
+      localStorage.setItem('datoGuardado', input.value);
+    });
+
+    // Activar el funcionamiento sin internet (Service Worker)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js')
+        .then(() => console.log('App lista para funcionar sin internet'))
+        .catch((err) => console.log('Error:', err));
+    }
+  </script>
+
+</body>
+</html>
