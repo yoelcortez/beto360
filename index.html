@@ -3,59 +3,73 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Beto360 - Bitácora GPS y Cámara</title>
+  <title>Beto360 - Bitácora con Sincronización</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#2563eb">
   <style>
     body { font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f8fafc; color: #1e293b; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .estado-red { font-size: 12px; font-weight: bold; padding: 5px 10px; border-radius: 20px; }
+    .online { background: #dcfce7; color: #166534; }
+    .offline { background: #fee2e2; color: #991b1b; }
     .card { background: white; padding: 16px; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); margin-bottom: 16px; }
-    textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 16px; box-sizing: border-box; margin-bottom: 10px; }
+    textarea, input[type="url"] { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; box-sizing: border-box; margin-bottom: 10px; }
     button { background: #2563eb; color: white; border: none; padding: 12px 16px; border-radius: 8px; font-size: 15px; cursor: pointer; width: 100%; font-weight: bold; }
     button:hover { background: #1d4ed8; }
-    button:disabled { background: #94a3b8; cursor: not-allowed; }
     .grupo-botones { display: flex; gap: 10px; margin-bottom: 12px; }
     .btn-camara { background: #0284c7; }
     .btn-gps { background: #d97706; }
+    .btn-sync { background: #7c3aed; margin-top: 8px; }
     .btn-exportar { background: #059669; }
     .btn-importar { background: #475569; }
     .btn-borrar { background: #ef4444; padding: 6px 12px; font-size: 13px; width: auto; margin-top: 10px; }
     .estado-info { font-size: 13px; color: #334155; background: #f1f5f9; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; display: none; }
     .registro { background: white; padding: 14px; border-radius: 10px; margin-bottom: 12px; border-left: 4px solid #2563eb; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
     .registro img { max-width: 100%; border-radius: 8px; margin-top: 10px; display: block; }
-    .fecha { font-size: 12px; color: #64748b; margin-bottom: 6px; }
+    .fecha { font-size: 12px; color: #64748b; margin-bottom: 6px; display: flex; justify-content: space-between; }
+    .badge-sync { font-weight: bold; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+    .sincronizado { background: #dcfce7; color: #166534; }
+    .pendiente { background: #fef9c3; color: #854d0e; }
     .gps-badge { display: inline-block; background: #fef3c7; color: #92400e; padding: 4px 8px; border-radius: 6px; font-size: 12px; margin-top: 8px; text-decoration: none; font-weight: 500; }
   </style>
 </head>
 <body>
 
-  <h2>📍 Beto360 - Bitácora Offline</h2>
+  <div class="header-bar">
+    <h2 style="margin:0;">📍 Beto360</h2>
+    <span id="indicadorRed" class="estado-red">Verificando...</span>
+  </div>
 
   <!-- Formulario principal -->
   <div class="card">
     <textarea id="textoNota" rows="3" placeholder="Escribe una descripción del lugar o actividad..."></textarea>
     
-    <!-- Botones de Cámara y GPS -->
     <div class="grupo-botones">
       <button type="button" class="btn-camara" onclick="document.getElementById('fotoInput').click()">📷 Tomar Foto</button>
       <button type="button" class="btn-gps" id="btnGps" onclick="obtenerUbicacion()">📍 Capturar GPS</button>
     </div>
 
-    <!-- Input oculto que abre la cámara trasera directamente en celulares -->
     <input type="file" id="fotoInput" accept="image/*" capture="environment" style="display: none;" onchange="mostrarNombreFoto(event)">
 
-    <!-- Indicadores visuales de foto y GPS listos -->
     <div id="infoFoto" class="estado-info"></div>
     <div id="infoGps" class="estado-info"></div>
 
     <button onclick="guardarRegistro()">💾 Guardar Registro</button>
   </div>
 
-  <!-- Panel de Respaldo -->
+  <!-- Configuración de Nube (Google Sheets) -->
   <div class="card">
-    <div style="font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #475569;">Copia de Seguridad</div>
+    <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px; color: #475569;">☁️ Sincronización Automática (Google Sheets)</div>
+    <input type="url" id="webhookUrl" placeholder="Pega aquí la URL de Google Apps Script..." onchange="guardarUrlNube()">
+    <button class="btn-sync" onclick="sincronizarPendientes()">🔄 Sincronizar Pendientes Ahora</button>
+  </div>
+
+  <!-- Panel de Respaldo Local -->
+  <div class="card">
+    <div style="font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #475569;">💾 Copia de Seguridad Local</div>
     <div class="grupo-botones" style="margin-bottom: 0;">
-      <button class="btn-exportar" onclick="exportarRespaldo()">⬇️ Exportar</button>
-      <button class="btn-importar" onclick="document.getElementById('importarInput').click()">⬆️ Restaurar</button>
+      <button class="btn-exportar" onclick="exportarRespaldo()">⬇️ Exportar JSON</button>
+      <button class="btn-importar" onclick="document.getElementById('importarInput').click()">⬆️ Restaurar JSON</button>
     </div>
     <input type="file" id="importarInput" accept=".json" style="display: none;" onchange="importarRespaldo(event)">
   </div>
@@ -64,9 +78,34 @@
 
   <script>
     let db;
-    let ubicacionActual = null; // Guardará { lat, lng } temporalmente
+    let ubicacionActual = null;
 
-    // 1. Iniciar IndexedDB (Versión 1)
+    // Cargar URL de Google Sheets guardada previamente
+    document.getElementById('webhookUrl').value = localStorage.getItem('beto360_webhook') || '';
+
+    function guardarUrlNube() {
+      const url = document.getElementById('webhookUrl').value.trim();
+      localStorage.setItem('beto360_webhook', url);
+      sincronizarPendientes();
+    }
+
+    // Monitor de conexión a internet en tiempo real
+    function actualizarEstadoRed() {
+      const badge = document.getElementById('indicadorRed');
+      if (navigator.onLine) {
+        badge.textContent = '🟢 En línea';
+        badge.className = 'estado-red online';
+        sincronizarPendientes(); // Intentar subir automáticamente al volver la señal
+      } else {
+        badge.textContent = '🔴 Sin internet (Modo Offline)';
+        badge.className = 'estado-red offline';
+      }
+    }
+
+    window.addEventListener('online', actualizarEstadoRed);
+    window.addEventListener('offline', actualizarEstadoRed);
+
+    // 1. Iniciar IndexedDB
     const request = indexedDB.open('Beto360DB', 1);
 
     request.onupgradeneeded = (e) => {
@@ -76,10 +115,11 @@
 
     request.onsuccess = (e) => {
       db = e.target.result;
+      actualizarEstadoRed();
       mostrarRegistros();
     };
 
-    // 2. Mostrar aviso cuando se toma una foto
+    // 2. Foto y GPS
     function mostrarNombreFoto(event) {
       const archivo = event.target.files[0];
       const infoFoto = document.getElementById('infoFoto');
@@ -89,34 +129,29 @@
       }
     }
 
-    // 3. Obtener coordenadas GPS (funciona sin internet usando el chip GPS del celular)
     function obtenerUbicacion() {
       const infoGps = document.getElementById('infoGps');
       const btnGps = document.getElementById('btnGps');
 
-      if (!('geolocation' in navigator)) {
-        alert('Tu dispositivo no soporta GPS.');
-        return;
-      }
+      if (!('geolocation' in navigator)) return alert('Dispositivo sin GPS.');
 
       btnGps.disabled = true;
       btnGps.textContent = '⏳ Buscando satélites...';
       infoGps.style.display = 'block';
-      infoGps.textContent = 'Obteniendo coordenadas exactas...';
+      infoGps.textContent = 'Obteniendo coordenadas...';
 
       navigator.geolocation.getCurrentPosition(
-        (posicion) => {
+        (pos) => {
           ubicacionActual = {
-            lat: posicion.coords.latitude.toFixed(6),
-            lng: posicion.coords.longitude.toFixed(6),
-            precision: Math.round(posicion.coords.accuracy)
+            lat: pos.coords.latitude.toFixed(6),
+            lng: pos.coords.longitude.toFixed(6)
           };
-          infoGps.innerHTML = `✅ <b>GPS fijado:</b> ${ubicacionActual.lat}, ${ubicacionActual.lng} (±${ubicacionActual.precision}m)`;
+          infoGps.innerHTML = `✅ <b>GPS fijado:</b> ${ubicacionActual.lat}, ${ubicacionActual.lng}`;
           btnGps.disabled = false;
           btnGps.textContent = '📍 Actualizar GPS';
         },
-        (error) => {
-          infoGps.textContent = '❌ No se pudo obtener el GPS. Revisa que tengas la ubicación encendida y con permisos.';
+        () => {
+          infoGps.textContent = '❌ No se pudo obtener el GPS.';
           btnGps.disabled = false;
           btnGps.textContent = '📍 Reintentar GPS';
         },
@@ -124,28 +159,27 @@
       );
     }
 
-    // 4. Guardar nota + foto + GPS en IndexedDB
+    // 3. Guardar registro marcado como "sincronizado: false"
     function guardarRegistro() {
       const texto = document.getElementById('textoNota').value.trim();
       const archivoFoto = document.getElementById('fotoInput').files[0];
 
       if (!texto && !archivoFoto && !ubicacionActual) {
-        alert('Agrega al menos una nota, una foto o tu ubicación GPS.');
-        return;
+        return alert('Agrega una nota, foto o GPS.');
       }
 
       const nuevoRegistro = {
         texto: texto,
         fecha: new Date().toLocaleString(),
         imagen: archivoFoto || null,
-        gps: ubicacionActual
+        gps: ubicacionActual,
+        sincronizado: false // Pendiente de enviar a la nube
       };
 
       const transaccion = db.transaction(['registros'], 'readwrite');
       transaccion.objectStore('registros').add(nuevoRegistro);
 
       transaccion.oncomplete = () => {
-        // Limpiar formulario
         document.getElementById('textoNota').value = '';
         document.getElementById('fotoInput').value = '';
         document.getElementById('infoFoto').style.display = 'none';
@@ -153,93 +187,43 @@
         document.getElementById('btnGps').textContent = '📍 Capturar GPS';
         ubicacionActual = null;
         mostrarRegistros();
-      };
-    }
-
-    // 5. Mostrar todos los registros
-    function mostrarRegistros() {
-      const contenedor = document.getElementById('listaRegistros');
-      contenedor.innerHTML = '';
-
-      const transaccion = db.transaction(['registros'], 'readonly');
-      const almacen = transaccion.objectStore('registros');
-
-      almacen.openCursor(null, 'prev').onsuccess = (e) => {
-        const cursor = e.target.result;
-        if (cursor) {
-          const item = cursor.value;
-          const div = document.createElement('div');
-          div.className = 'registro';
-
-          let imgHTML = '';
-          if (item.imagen) {
-            const urlImagen = URL.createObjectURL(item.imagen);
-            imgHTML = `<img src="${urlImagen}" alt="Foto guardada">`;
-          }
-
-          let gpsHTML = '';
-          if (item.gps) {
-            const mapaUrl = `https://google.com{item.gps.lat},${item.gps.lng}`;
-            gpsHTML = `<div><a href="${mapaUrl}" target="_blank" class="gps-badge">📍 ${item.gps.lat}, ${item.gps.lng} (Ver en mapa)</a></div>`;
-          }
-
-          div.innerHTML = `
-            <div class="fecha">📅 ${item.fecha}</div>
-            <div>${item.texto}</div>
-            ${gpsHTML}
-            ${imgHTML}
-            <div><button class="btn-borrar" onclick="eliminarRegistro(${item.id})">Eliminar</button></div>
-          `;
-          contenedor.appendChild(div);
-          cursor.continue();
+        
+        // Si hay internet en este momento, subirlo de inmediato
+        if (navigator.onLine) {
+          sincronizarPendientes();
         }
       };
     }
 
-    // 6. Eliminar registro
-    function eliminarRegistro(id) {
-      const transaccion = db.transaction(['registros'], 'readwrite');
-      transaccion.objectStore('registros').delete(id);
-      transaccion.oncomplete = () => mostrarRegistros();
-    }
+    // 4. Sincronización automática con Google Sheets
+    async function sincronizarPendientes() {
+      const webhookUrl = localStorage.getItem('beto360_webhook');
+      if (!webhookUrl || !navigator.onLine || !db) return;
 
-    // 7. Respaldo y Restauración (incluye GPS y Fotos)
-    function blobABase64(blob) {
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.readAsDataURL(blob);
-      });
-    }
-
-    async function exportarRespaldo() {
       const transaccion = db.transaction(['registros'], 'readonly');
       const peticion = transaccion.objectStore('registros').getAll();
 
       peticion.onsuccess = async () => {
-        const registros = peticion.result;
-        if (registros.length === 0) {
-          alert('No hay datos para exportar.');
-          return;
-        }
+        const todos = peticion.result;
+        const pendientes = todos.filter(r => !r.sincronizado);
 
-        const datosExportar = [];
-        for (const reg of registros) {
-          datosExportar.push({
-            texto: reg.texto,
-            fecha: reg.fecha,
-            gps: reg.gps || null,
-            imagenBase64: reg.imagen ? await blobABase64(reg.imagen) : null
-          });
-        }
+        for (const reg of pendientes) {
+          try {
+            // Enviar datos de texto y GPS a Google Sheets
+            await fetch(webhookUrl, {
+              method: 'POST',
+              mode: 'no-cors', // Evita bloqueos de seguridad CORS de Google
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                fecha: reg.fecha,
+                texto: reg.texto || '(Solo foto/GPS)',
+                lat: reg.gps ? reg.gps.lat : '',
+                lng: reg.gps ? reg.gps.lng : ''
+              })
+            });
 
-        const archivo = new Blob([JSON.stringify(datosExportar, null, 2)], { type: 'application/json' });
-        const enlace = document.createElement('a');
-        enlace.href = URL.createObjectURL(archivo);
-        enlace.download = `beto360-respaldo-${new Date().toISOString().slice(0, 10)}.json`;
-        enlace.click();
-      };
-    }
-
-    function importarRespaldo(event) {
-      
+            // Marcar como sincronizado en IndexedDB
+            const txUpdate = db.transaction(['registros'], 'readwrite');
+            reg.sincronizado = true;
+            txUpdate.objectStore('registros').put(reg);
+            
