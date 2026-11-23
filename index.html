@@ -25,6 +25,7 @@
     .btn-importar { background: #475569; }
     .btn-borrar { background: #ef4444; padding: 6px 12px; font-size: 13px; width: auto; margin-top: 10px; display: block; }
     .estado-info { font-size: 13px; color: #334155; background: #f1f5f9; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; display: none; }
+    .aviso-compartido { font-size: 13px; color: #1e40af; background: #dbeafe; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; display: none; font-weight: 500; }
     .registro { background: white; padding: 14px; border-radius: 10px; margin-bottom: 12px; border-left: 4px solid #2563eb; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
     .registro img { max-width: 100%; border-radius: 8px; margin-top: 10px; display: block; }
     .texto-registro { margin: 6px 0; white-space: pre-wrap; }
@@ -42,7 +43,9 @@
     <span id="indicadorRed" class="estado-red">Verificando...</span>
   </div>
 
+  <!-- Formulario principal -->
   <div class="card">
+    <div id="avisoCompartido" class="aviso-compartido">📲 Contenido recibido desde otra app</div>
     <textarea id="textoNota" rows="3" placeholder="Escribe una descripción del lugar o actividad..."></textarea>
     
     <div class="grupo-botones">
@@ -58,12 +61,14 @@
     <button type="button" onclick="guardarRegistro()">💾 Guardar Registro</button>
   </div>
 
+  <!-- Configuración de Nube (Google Sheets) -->
   <div class="card">
     <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px; color: #475569;">☁️ Sincronización Automática (Google Sheets)</div>
     <input type="url" id="webhookUrl" placeholder="Pega aquí la URL de Google Apps Script..." onchange="guardarUrlNube()">
     <button type="button" class="btn-sync" onclick="sincronizarPendientes()">🔄 Sincronizar Pendientes Ahora</button>
   </div>
 
+  <!-- Panel de Respaldo Local -->
   <div class="card">
     <div style="font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #475569;">💾 Copia de Seguridad Local</div>
     <div class="grupo-botones" style="margin-bottom: 0;">
@@ -79,6 +84,7 @@
     let db = null;
     let ubicacionActual = null;
 
+    // Cargar URL de Google Sheets guardada previamente
     document.getElementById('webhookUrl').value = localStorage.getItem('beto360_webhook') || '';
 
     function guardarUrlNube() {
@@ -87,6 +93,25 @@
       sincronizarPendientes();
     }
 
+    // FUNCIÓN 5: Recibir texto o enlaces compartidos desde otras apps
+    function revisarDatosCompartidos() {
+      const parametros = new URLSearchParams(window.location.search);
+      const titulo = parametros.get('titulo') || '';
+      const texto = parametros.get('texto') || '';
+      const enlace = parametros.get('enlace') || '';
+
+      const partes = [titulo, texto, enlace].filter(function(p) { return p.trim() !== ''; });
+
+      if (partes.length > 0) {
+        document.getElementById('textoNota').value = partes.join('\n');
+        document.getElementById('avisoCompartido').style.display = 'block';
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+
+    revisarDatosCompartidos();
+
+    // Monitor de conexión a internet
     function actualizarEstadoRed() {
       const badge = document.getElementById('indicadorRed');
       if (navigator.onLine) {
@@ -102,6 +127,7 @@
     window.addEventListener('online', actualizarEstadoRed);
     window.addEventListener('offline', actualizarEstadoRed);
 
+    // 1. Iniciar IndexedDB
     const request = indexedDB.open('Beto360DB', 1);
 
     request.onupgradeneeded = function(e) {
@@ -121,6 +147,7 @@
       alert('Error al abrir la base de datos local.');
     };
 
+    // 2. Foto y GPS
     function mostrarNombreFoto(event) {
       const archivo = event.target.files.item(0);
       const infoFoto = document.getElementById('infoFoto');
@@ -163,6 +190,7 @@
       );
     }
 
+    // 3. Guardar registro
     function guardarRegistro() {
       if (!db) {
         alert('La base de datos aún está cargando, intenta en un segundo.');
@@ -193,16 +221,18 @@
         document.getElementById('fotoInput').value = '';
         document.getElementById('infoFoto').style.display = 'none';
         document.getElementById('infoGps').style.display = 'none';
+        document.getElementById('avisoCompartido').style.display = 'none';
         document.getElementById('btnGps').textContent = '📍 Capturar GPS';
         ubicacionActual = null;
         mostrarRegistros();
-        
+
         if (navigator.onLine) {
           sincronizarPendientes();
         }
       };
     }
 
+    // 4. Sincronización automática con Google Sheets
     async function sincronizarPendientes() {
       const webhookUrl = document.getElementById('webhookUrl').value.trim() || localStorage.getItem('beto360_webhook');
       if (!webhookUrl || !navigator.onLine || !db) return;
@@ -242,6 +272,7 @@
       };
     }
 
+    // 5. Dibujar registros en pantalla (usando DOM seguro)
     function mostrarRegistros() {
       if (!db) return;
       const contenedor = document.getElementById('listaRegistros');
@@ -316,6 +347,7 @@
       };
     }
 
+    // 6. Respaldo y Restauración JSON
     function blobABase64(blob) {
       return new Promise(function(resolve) {
         const reader = new FileReader();
@@ -383,6 +415,7 @@
       reader.readAsText(archivo);
     }
 
+    // Registrar y actualizar Service Worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js').then(function(reg) {
         reg.update();
