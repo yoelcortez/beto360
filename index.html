@@ -228,3 +228,27 @@
             txUpdate.objectStore('registros').put(reg);
           } catch (error) {
             console.log('Error al sincronizar, se reintentará luego:', error);
+            const datosImportados = JSON.parse(e.target.result);
+for (const item of datosImportados) {
+let imagenBlob = item.imagenBase64 ? await (await fetch(item.imagenBase64)).blob() : null;
+const transaccion = db.transaction(['registros'], 'readwrite');
+transaccion.objectStore('registros').add({
+texto: item.texto,
+fecha: item.fecha,
+gps: item.gps || null,
+sincronizado: item.sincronizado || false,
+imagen: imagenBlob
+});
+}
+alert(¡Se restauraron ${datosImportados.length} registros!);
+mostrarRegistros();
+} catch (error) {
+alert('Archivo no válido.');
+}
+event.target.value = '';
+};
+reader.readAsText(archivo);
+}
+if ('serviceWorker' in navigator) {
+navigator.serviceWorker.register('./sw.js');
+}
