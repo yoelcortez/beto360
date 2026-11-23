@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Beto360 - Bitácora con Sincronización</title>
+  <title>Beto360 - Bitácora Offline</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#2563eb">
   <style>
@@ -23,10 +23,11 @@
     .btn-sync { background: #7c3aed; margin-top: 4px; }
     .btn-exportar { background: #059669; }
     .btn-importar { background: #475569; }
-    .btn-borrar { background: #ef4444; padding: 6px 12px; font-size: 13px; width: auto; margin-top: 10px; }
+    .btn-borrar { background: #ef4444; padding: 6px 12px; font-size: 13px; width: auto; margin-top: 10px; display: block; }
     .estado-info { font-size: 13px; color: #334155; background: #f1f5f9; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; display: none; }
     .registro { background: white; padding: 14px; border-radius: 10px; margin-bottom: 12px; border-left: 4px solid #2563eb; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
     .registro img { max-width: 100%; border-radius: 8px; margin-top: 10px; display: block; }
+    .texto-registro { margin: 6px 0; white-space: pre-wrap; }
     .fecha { font-size: 12px; color: #64748b; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
     .badge-sync { font-weight: bold; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
     .sincronizado { background: #dcfce7; color: #166534; }
@@ -41,7 +42,6 @@
     <span id="indicadorRed" class="estado-red">Verificando...</span>
   </div>
 
-  <!-- Formulario principal -->
   <div class="card">
     <textarea id="textoNota" rows="3" placeholder="Escribe una descripción del lugar o actividad..."></textarea>
     
@@ -55,22 +55,20 @@
     <div id="infoFoto" class="estado-info"></div>
     <div id="infoGps" class="estado-info"></div>
 
-    <button onclick="guardarRegistro()">💾 Guardar Registro</button>
+    <button type="button" onclick="guardarRegistro()">💾 Guardar Registro</button>
   </div>
 
-  <!-- Configuración de Nube (Google Sheets) -->
   <div class="card">
     <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px; color: #475569;">☁️ Sincronización Automática (Google Sheets)</div>
     <input type="url" id="webhookUrl" placeholder="Pega aquí la URL de Google Apps Script..." onchange="guardarUrlNube()">
-    <button class="btn-sync" onclick="sincronizarPendientes()">🔄 Sincronizar Pendientes Ahora</button>
+    <button type="button" class="btn-sync" onclick="sincronizarPendientes()">🔄 Sincronizar Pendientes Ahora</button>
   </div>
 
-  <!-- Panel de Respaldo Local -->
   <div class="card">
     <div style="font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #475569;">💾 Copia de Seguridad Local</div>
     <div class="grupo-botones" style="margin-bottom: 0;">
-      <button class="btn-exportar" onclick="exportarRespaldo()">⬇️ Exportar JSON</button>
-      <button class="btn-importar" onclick="document.getElementById('importarInput').click()">⬆️ Restaurar JSON</button>
+      <button type="button" class="btn-exportar" onclick="exportarRespaldo()">⬇️ Exportar JSON</button>
+      <button type="button" class="btn-importar" onclick="document.getElementById('importarInput').click()">⬆️ Restaurar JSON</button>
     </div>
     <input type="file" id="importarInput" accept=".json" style="display: none;" onchange="importarRespaldo(event)">
   </div>
@@ -78,10 +76,9 @@
   <div id="listaRegistros"></div>
 
   <script>
-    let db;
+    let db = null;
     let ubicacionActual = null;
 
-    // Cargar URL de Google Sheets guardada previamente
     document.getElementById('webhookUrl').value = localStorage.getItem('beto360_webhook') || '';
 
     function guardarUrlNube() {
@@ -90,7 +87,6 @@
       sincronizarPendientes();
     }
 
-    // Monitor de conexión a internet en tiempo real
     function actualizarEstadoRed() {
       const badge = document.getElementById('indicadorRed');
       if (navigator.onLine) {
@@ -106,27 +102,31 @@
     window.addEventListener('online', actualizarEstadoRed);
     window.addEventListener('offline', actualizarEstadoRed);
 
-    // 1. Iniciar IndexedDB
     const request = indexedDB.open('Beto360DB', 1);
 
-    request.onupgradeneeded = (e) => {
+    request.onupgradeneeded = function(e) {
       db = e.target.result;
-      db.createObjectStore('registros', { keyPath: 'id', autoIncrement: true });
+      if (!db.objectStoreNames.contains('registros')) {
+        db.createObjectStore('registros', { keyPath: 'id', autoIncrement: true });
+      }
     };
 
-    request.onsuccess = (e) => {
+    request.onsuccess = function(e) {
       db = e.target.result;
       actualizarEstadoRed();
       mostrarRegistros();
     };
 
-    // 2. Foto y GPS
+    request.onerror = function() {
+      alert('Error al abrir la base de datos local.');
+    };
+
     function mostrarNombreFoto(event) {
-      const archivo = event.target.files[0];
+      const archivo = event.target.files.item(0);
       const infoFoto = document.getElementById('infoFoto');
       if (archivo) {
         infoFoto.style.display = 'block';
-        infoFoto.textContent = `📷 Foto lista: ${archivo.name}`;
+        infoFoto.textContent = '📷 Foto lista: ' + archivo.name;
       }
     }
 
@@ -134,7 +134,10 @@
       const infoGps = document.getElementById('infoGps');
       const btnGps = document.getElementById('btnGps');
 
-      if (!('geolocation' in navigator)) return alert('Dispositivo sin GPS.');
+      if (!('geolocation' in navigator)) {
+        alert('Dispositivo sin GPS.');
+        return;
+      }
 
       btnGps.disabled = true;
       btnGps.textContent = '⏳ Buscando satélites...';
@@ -142,17 +145,17 @@
       infoGps.textContent = 'Obteniendo coordenadas...';
 
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
+        function(pos) {
           ubicacionActual = {
             lat: pos.coords.latitude.toFixed(6),
             lng: pos.coords.longitude.toFixed(6)
           };
-          infoGps.innerHTML = `✅ <b>GPS fijado:</b> ${ubicacionActual.lat}, ${ubicacionActual.lng}`;
+          infoGps.textContent = '✅ GPS fijado: ' + ubicacionActual.lat + ', ' + ubicacionActual.lng;
           btnGps.disabled = false;
           btnGps.textContent = '📍 Actualizar GPS';
         },
-        () => {
-          infoGps.textContent = '❌ No se pudo obtener el GPS.';
+        function() {
+          infoGps.textContent = '❌ No se pudo obtener el GPS. Verifica los permisos.';
           btnGps.disabled = false;
           btnGps.textContent = '📍 Reintentar GPS';
         },
@@ -160,13 +163,18 @@
       );
     }
 
-    // 3. Guardar registro marcado como "sincronizado: false"
     function guardarRegistro() {
+      if (!db) {
+        alert('La base de datos aún está cargando, intenta en un segundo.');
+        return;
+      }
+
       const texto = document.getElementById('textoNota').value.trim();
-      const archivoFoto = document.getElementById('fotoInput').files[0];
+      const archivoFoto = document.getElementById('fotoInput').files.item(0);
 
       if (!texto && !archivoFoto && !ubicacionActual) {
-        return alert('Agrega una nota, foto o GPS.');
+        alert('Agrega una nota, foto o GPS.');
+        return;
       }
 
       const nuevoRegistro = {
@@ -180,7 +188,7 @@
       const transaccion = db.transaction(['registros'], 'readwrite');
       transaccion.objectStore('registros').add(nuevoRegistro);
 
-      transaccion.oncomplete = () => {
+      transaccion.oncomplete = function() {
         document.getElementById('textoNota').value = '';
         document.getElementById('fotoInput').value = '';
         document.getElementById('infoFoto').style.display = 'none';
@@ -195,7 +203,6 @@
       };
     }
 
-    // 4. Sincronización automática con Google Sheets
     async function sincronizarPendientes() {
       const webhookUrl = document.getElementById('webhookUrl').value.trim() || localStorage.getItem('beto360_webhook');
       if (!webhookUrl || !navigator.onLine || !db) return;
@@ -205,9 +212,11 @@
       const transaccion = db.transaction(['registros'], 'readonly');
       const peticion = transaccion.objectStore('registros').getAll();
 
-      peticion.onsuccess = async () => {
+      peticion.onsuccess = async function() {
         const todos = peticion.result;
-        const pendientes = todos.filter(r => !r.sincronizado);
+        const pendientes = todos.filter(function(r) { return !r.sincronizado; });
+
+        if (pendientes.length === 0) return;
 
         for (const reg of pendientes) {
           try {
@@ -222,33 +231,163 @@
                 lng: reg.gps ? reg.gps.lng : ''
               })
             });
-
             const txUpdate = db.transaction(['registros'], 'readwrite');
             reg.sincronizado = true;
             txUpdate.objectStore('registros').put(reg);
           } catch (error) {
-            console.log('Error al sincronizar, se reintentará luego:', error);
-            const datosImportados = JSON.parse(e.target.result);
-for (const item of datosImportados) {
-let imagenBlob = item.imagenBase64 ? await (await fetch(item.imagenBase64)).blob() : null;
-const transaccion = db.transaction(['registros'], 'readwrite');
-transaccion.objectStore('registros').add({
-texto: item.texto,
-fecha: item.fecha,
-gps: item.gps || null,
-sincronizado: item.sincronizado || false,
-imagen: imagenBlob
-});
-}
-alert(¡Se restauraron ${datosImportados.length} registros!);
-mostrarRegistros();
-} catch (error) {
-alert('Archivo no válido.');
-}
-event.target.value = '';
-};
-reader.readAsText(archivo);
-}
-if ('serviceWorker' in navigator) {
-navigator.serviceWorker.register('./sw.js');
-}
+            console.log('Error al sincronizar:', error);
+          }
+        }
+        mostrarRegistros();
+      };
+    }
+
+    function mostrarRegistros() {
+      if (!db) return;
+      const contenedor = document.getElementById('listaRegistros');
+      contenedor.innerHTML = '';
+
+      const transaccion = db.transaction(['registros'], 'readonly');
+      transaccion.objectStore('registros').openCursor(null, 'prev').onsuccess = function(e) {
+        const cursor = e.target.result;
+        if (cursor) {
+          const item = cursor.value;
+          const div = document.createElement('div');
+          div.className = 'registro';
+
+          const header = document.createElement('div');
+          header.className = 'fecha';
+
+          const spanFecha = document.createElement('span');
+          spanFecha.textContent = '📅 ' + item.fecha;
+
+          const spanBadge = document.createElement('span');
+          spanBadge.className = 'badge-sync ' + (item.sincronizado ? 'sincronizado' : 'pendiente');
+          spanBadge.textContent = item.sincronizado ? '☁️ En la nube' : '⏳ Pendiente de subir';
+
+          header.appendChild(spanFecha);
+          header.appendChild(spanBadge);
+          div.appendChild(header);
+
+          if (item.texto) {
+            const pTexto = document.createElement('div');
+            pTexto.className = 'texto-registro';
+            pTexto.textContent = item.texto;
+            div.appendChild(pTexto);
+          }
+
+          if (item.gps) {
+            const enlaceGps = document.createElement('a');
+            enlaceGps.className = 'gps-badge';
+            enlaceGps.href = 'https://maps.google.com/?q=' + item.gps.lat + ',' + item.gps.lng;
+            enlaceGps.target = '_blank';
+            enlaceGps.rel = 'noopener noreferrer';
+            enlaceGps.textContent = '📍 ' + item.gps.lat + ', ' + item.gps.lng + ' (Ver mapa)';
+            div.appendChild(enlaceGps);
+          }
+
+          if (item.imagen) {
+            const img = document.createElement('img');
+            img.src = URL.createObjectURL(item.imagen);
+            img.alt = 'Foto del registro';
+            div.appendChild(img);
+          }
+
+          const btnBorrar = document.createElement('button');
+          btnBorrar.type = 'button';
+          btnBorrar.className = 'btn-borrar';
+          btnBorrar.textContent = '🗑️ Eliminar';
+          btnBorrar.onclick = function() {
+            eliminarRegistro(item.id);
+          };
+          div.appendChild(btnBorrar);
+
+          contenedor.appendChild(div);
+          cursor.continue();
+        }
+      };
+    }
+
+    function eliminarRegistro(id) {
+      const transaccion = db.transaction(['registros'], 'readwrite');
+      transaccion.objectStore('registros').delete(id);
+      transaccion.oncomplete = function() {
+        mostrarRegistros();
+      };
+    }
+
+    function blobABase64(blob) {
+      return new Promise(function(resolve) {
+        const reader = new FileReader();
+        reader.onloadend = function() { resolve(reader.result); };
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    async function exportarRespaldo() {
+      const transaccion = db.transaction(['registros'], 'readonly');
+      const peticion = transaccion.objectStore('registros').getAll();
+      peticion.onsuccess = async function() {
+        const registros = peticion.result;
+        if (registros.length === 0) {
+          alert('No hay datos para exportar.');
+          return;
+        }
+        const datosExportar = [];
+        for (const reg of registros) {
+          datosExportar.push({
+            texto: reg.texto,
+            fecha: reg.fecha,
+            gps: reg.gps || null,
+            sincronizado: reg.sincronizado || false,
+            imagenBase64: reg.imagen ? await blobABase64(reg.imagen) : null
+          });
+        }
+        const archivo = new Blob([JSON.stringify(datosExportar, null, 2)], { type: 'application/json' });
+        const enlace = document.createElement('a');
+        enlace.href = URL.createObjectURL(archivo);
+        enlace.download = 'beto360-respaldo-' + new Date().toISOString().slice(0, 10) + '.json';
+        enlace.click();
+      };
+    }
+
+    function importarRespaldo(event) {
+      const archivo = event.target.files.item(0);
+      if (!archivo) return;
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        try {
+          const datosImportados = JSON.parse(e.target.result);
+          for (const item of datosImportados) {
+            let imagenBlob = null;
+            if (item.imagenBase64) {
+              const resp = await fetch(item.imagenBase64);
+              imagenBlob = await resp.blob();
+            }
+            const transaccion = db.transaction(['registros'], 'readwrite');
+            transaccion.objectStore('registros').add({
+              texto: item.texto,
+              fecha: item.fecha,
+              gps: item.gps || null,
+              sincronizado: item.sincronizado || false,
+              imagen: imagenBlob
+            });
+          }
+          alert('¡Se restauraron ' + datosImportados.length + ' registros!');
+          mostrarRegistros();
+        } catch (error) {
+          alert('Archivo no válido.');
+        }
+        event.target.value = '';
+      };
+      reader.readAsText(archivo);
+    }
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').then(function(reg) {
+        reg.update();
+      });
+    }
+  </script>
+</body>
+</html>
