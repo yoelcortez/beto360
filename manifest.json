@@ -1,15 +1,25 @@
 {
-  "name": "Mi Aplicación de Notas",
-  "short_name": "Mis Notas",
+  "name": "Beto360 - Bitácora Offline",
+  "short_name": "Beto360",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#2563eb",
   "icons": [
     {
-      "src": "https://flaticon.com",
+      "src": "./icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
-  ]
+  ],
+  "share_target": {
+    "action": "./index.html",
+    "method": "GET",
+    "params": {
+      "title": "titulo",
+      "text": "texto",
+      "url": "enlace"
+    }
+  }
 }
